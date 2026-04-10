@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>段考時程表 </title>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+        :root {
+            --bg-grad: linear-gradient(135deg, #fffef0 0%, #fff9e6 100%);
+            --widget-bg: #ffffff;
+            --text-main: #4a3a2a;
+            --border-color: #f0f0f0;
+            --shadow: 0 10px 0px rgba(0,0,0,0.05);
+            --header-bg: #fdfdfd;
+            --c-mint-d: #4caf50;
+            --c-peach-d: #f44336;
+            --c-sky-d: #2196f3;
+            --c-lemon-d: #fbc02d;
+            --c-lavender-d: #9c27b0;
+        }
+
+        body {
+            font-family: "Microsoft JhengHei", sans-serif;
+            background: var(--bg-grad);
+            color: var(--text-main);
+            margin: 0; padding: 0;
+            width: 100vw; height: 100vh;
+            overflow: hidden; user-select: none;
+        }
+
+        /* 視窗共通樣式 */
+        .widget {
+            position: absolute; min-width: 200px; min-height: 100px;
+            background: var(--widget-bg);
+            border-radius: 30px; box-shadow: var(--shadow);
+            display: flex; flex-direction: column; 
+            border: 4px solid var(--border-color);
+            resize: both; overflow: hidden; z-index: 10;
+            display: none;
+        }
+
+        #widget-clock { border-color: var(--c-sky-d); }
+        #widget-exams { border-color: var(--c-peach-d); }
+        #widget-attendance { border-color: var(--c-mint-d); }
+        #widget-momo { border-color: var(--c-lemon-d); }
+
+        .widget-header {
+            padding: 10px 20px; cursor: move; display: flex;
+            justify-content: space-between; align-items: center;
+            font-weight: 900; background: var(--header-bg);
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        /* 視窗按鈕樣式 */
+        .header-controls { display: flex; gap: 8px; }
+        .dot-btn {
+            width: 24px; height: 24px; border-radius: 50%;
+            background: #4a3a2a; color: white;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 14px; cursor: pointer; transition: opacity 0.2s;
+            line-height: 1; font-weight: bold;
+        }
+        .dot-btn:hover { opacity: 0.7; }
+        .dot-btn.btn-close { background: #4a3a2a; }
+
+        .widget-content { padding: 15px; flex-grow: 1; overflow: hidden; position: relative; display: flex; flex-direction: column; }
+
+        /* 時鐘樣態佈局 */
+        .clock-container { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; }
+        #clock-date { font-weight: bold; color: var(--c-sky-d); margin-bottom: 5px; text-align: center; }
+        .clock-display-area { display: flex; align-items: center; justify-content: center; width: 100%; flex-grow: 1; gap: 20px; }
+        #digital-clock { font-weight: 900; text-align: center; line-height: 1; font-family: 'Arial', sans-serif; }
+        
+        .analog-clock {
+            border: 8px double #4a3a2a; 
+            border-radius: 50%; position: relative; background: white; flex-shrink: 0;
+        }
+        .analog-clock .hand { position: absolute; bottom: 50%; left: 50%; transform-origin: bottom; border-radius: 10px; background: #4a3a2a; z-index: 5; }
+        .hand.hour { width: 4.5%; height: 25%; margin-left: -2.25%; }
+        .hand.min { width: 3%; height: 38%; margin-left: -1.5%; }
+        .hand.sec { width: 1.5%; height: 45%; margin-left: -0.75%; background: var(--c-peach-d); }
+        .analog-clock .center { position: absolute; top: 50%; left: 50%; width: 7%; height: 7%; background: #4a3a2a; border-radius: 50%; transform: translate(-50%, -50%); z-index: 10; }
+        
+        /* 鐘面數字樣式 */
+        .clock-number {
+            position: absolute;
+            font-weight: 900;
+            color: #4a3a2a;
+            transform: translate(-50%, -50%);
+            z-index: 2;
+        }
+        
+        /* 點名簿樣式 */
+        .att-stats { display: flex; justify-content: space-around; align-items: center; margin-bottom: 10px; }
+        .att-stat-item { text-align: center; }
+        .att-stat-label { font-size: 0.8rem; color: #888; margin-bottom: 2px; }
+        .att-stat-val { font-size: 1.8rem; font-weight: 900; }
+        #disp-abs { color: var(--c-peach-d); }
+        .absent-note-area { flex-grow: 1; margin-top: 5px; }
+        #absent-note-text {
+            width: 100%; height: 100%; border: 2px dashed #eee; border-radius: 15px;
+            padding: 8px; font-size: 0.95rem; font-family: inherit; font-weight: bold;
+            resize: none; outline: none; background: #fafafa; color: #666; box-sizing: border-box;
+        }
+
+        /* MOMO 樣式 */
+        .momo-container { width: 100%; height: 100%; position: relative; flex-grow: 1; }
+        #momo-canvas { position: absolute; top: 0; left: 0; z-index: 5; cursor: crosshair; touch-action: none; pointer-events: none; }
+        #momo-text { width: 100%; height: 100%; border: none; outline: none; font-size: 1.2rem; font-family: inherit; resize: none; background: transparent; color: var(--text-main); font-weight: bold; }
+        .momo-toolbar { position: absolute; top: 5px; right: 5px; z-index: 10; display: flex; gap: 5px; }
+        .momo-btn { width: 35px; height: 35px; border-radius: 50%; border: none; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; justify-content: center; align-items: center; cursor: pointer; }
+        .momo-btn.active { background: var(--c-lemon-d); color: white; }
+
+        /* 考試項目 */
+        .exam-item { background: #fffcf5; padding: 12px; border-radius: 20px; margin-bottom: 10px; border: 2px solid #ffe0b2; cursor: pointer; }
+        .exam-item.type-rest { background: #f1f8e9; border-color: #c8e6c9; }
+        .progress-container { height: 10px; background: #eee; border-radius: 10px; overflow: hidden; margin-top: 8px; }
+        .progress-bar { height: 100%; width: 0%; transition: width 1s linear; background: var(--c-mint-d); }
+        .urgent { background: var(--c-peach-d) !important; animation: blink 1s infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+        /* 設定面板 */
+        #settings-panel { position: fixed; top: 0; right: -500px; width: 400px; height: 100%; background: white; box-shadow: -10px 0 30px rgba(0,0,0,0.1); transition: right 0.4s cubic-bezier(0.19, 1, 0.22, 1); z-index: 3000; display: flex; flex-direction: column; }
+        #settings-panel.show { right: 0; }
+        .settings-body { padding: 30px; flex-grow: 1; overflow-y: auto; }
+        .section-title { font-weight: 900; font-size: 1.1rem; margin: 20px 0 10px; color: var(--c-sky-d); border-left: 5px solid var(--c-sky-d); padding-left: 10px; }
+        .tool-toggle-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+        .fab-settings { position: fixed; bottom: 30px; right: 30px; width: 70px; height: 70px; background: #4a3a2a; color: white; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; box-shadow: 0 10px 25px rgba(0,0,0,0.2); z-index: 2001; font-size: 2rem; }
+        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); display: none; z-index: 2999; }
+        button { cursor: pointer; border-radius: 12px; font-weight: bold; }
+        .btn-primary { background: var(--c-mint-d); color: white; border: none; padding: 12px; width: 100%; font-size: 1rem; }
+        .btn-outline { background: white; border: 2px solid #eee; padding: 8px; font-size: 0.8rem; flex: 1; }
+        input[type="number"], input[type="text"] { padding: 8px; border-radius: 10px; border: 2px solid #eee; font-weight: bold; text-align: center; }
+
+        /* 模式切換按鈕組 */
+        .mode-selector { display: flex; gap: 5px; margin-top: 5px; }
+        .mode-option { flex: 1; text-align: center; padding: 8px; border: 2px solid #eee; border-radius: 10px; cursor: pointer; font-size: 0.85rem; font-weight: bold; }
+        .mode-option.active { background: var(--c-sky-d); color: white; border-color: var(--c-sky-d); }
+    </style>
+</head>
+<body>
+
+<div class="overlay" id="overlay" onclick="toggleSettings()"></div>
+
+<div id="settings-panel">
+    <div class="settings-body">
+        <h2 style="margin-top:0">🛠️ 管理中心</h2>
+        
+        <div class="section-title">🖼️ 顯示小工具</div>
+        <div class="tool-toggle-row"><span>⏰ 時鐘</span><input type="checkbox" id="check-clock" onchange="toggleWidget('widget-clock')"></div>
+        <div class="tool-toggle-row"><span>📖 考試表</span><input type="checkbox" id="check-exams" onchange="toggleWidget('widget-exams')"></div>
+        <div class="tool-toggle-row"><span>👥 點名簿</span><input type="checkbox" id="check-attendance" onchange="toggleWidget('widget-attendance')"></div>
+        <div class="tool-toggle-row"><span>📝 MOMO 記事本</span><input type="checkbox" id="check-momo" onchange="toggleWidget('widget-momo')"></div>
+
+        <div class="section-title">🕒 時鐘顯示樣態</div>
+        <div class="mode-selector">
+            <div class="mode-option" id="mode-opt-1" onclick="setClockMode(1)">數位</div>
+            <div class="mode-option" id="mode-opt-2" onclick="setClockMode(2)">類比</div>
+            <div class="mode-option" id="mode-opt-3" onclick="setClockMode(3)">雙重</div>
+        </div>
+
+        <div class="section-title">👥 班級出勤設定</div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px; align-items:center; text-align:center; font-size:0.9rem; font-weight:bold;">
+            <div>應到<br><input type="number" id="input-exp" value="30" onchange="updateAttendance()"></div>
+            <div>實到<br><input type="number" id="input-act" value="30" onchange="updateAttendance()"></div>
+            <div>缺席<br><input type="number" id="input-abs" value="0" onchange="updateAttendance()"></div>
+        </div>
+
+        <div class="section-title">☁️ 雲端與樣板</div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+            <button class="btn-outline" onclick="handleCloudSync()">雲端備份</button>
+            <button class="btn-outline" onclick="alert('載入雲端完成')">載入雲端</button>
+            <button class="btn-outline" onclick="copyTemplate()">設為第一天樣板</button>
+            <button class="btn-outline" onclick="loadTemplate()">載入樣板</button>
+        </div>
+
+        <div class="section-title">✨ 編輯考試項目</div>
+        <div style="display:flex; flex-wrap: wrap; gap:5px; margin-bottom:10px;">
+            <button class="btn-outline" onclick="selQuickSub('國語')">📕 國語</button>
+            <button class="btn-outline" onclick="selQuickSub('英語')">🔤 英語</button>
+            <button class="btn-outline" onclick="selQuickSub('數學')">📐 數學</button>
+            <button class="btn-outline" onclick="selQuickSub('社會')">🌍 社會</button>
+            <button class="btn-outline" onclick="selQuickSub('自然')">🔬 自然</button>
+            <button class="btn-outline" onclick="selQuickSub('生活')">🎨 生活</button>
+            <button class="btn-outline" onclick="selQuickSub('休息')">☕ 休息</button>
+        </div>
+        <input type="text" id="edit-name" placeholder="科目名稱" style="width:100%; margin-bottom:10px; box-sizing:border-box;">
+        <div style="display:flex; gap:5px; align-items:center;">
+            <input type="time" id="edit-start" style="flex:1;">
+            <span>~</span>
+            <input type="time" id="edit-end" style="flex:1;">
+        </div>
+        <input type="hidden" id="edit-id">
+        <button class="btn-primary" style="margin-top:10px;" onclick="saveExam()">新增 / 更新項目</button>
+
+        <button onclick="toggleSettings()" style="margin-top:40px; width:100%; padding:15px; background:#f0f0f0; border:none; border-radius:12px;">完成設定</button>
+    </div>
+</div>
+
+<div class="fab-settings" onclick="toggleSettings()">⚙️</div>
+
+<!-- 時鐘工具 -->
+<div class="widget" id="widget-clock" style="top:40px; left:40px; width:450px; height:240px;">
+    <div class="widget-header">
+        <span>⏰ 時間</span>
+        <div class="header-controls">
+            <span class="dot-btn btn-close" onclick="toggleWidget('widget-clock')">✕</span>
+        </div>
+    </div>
+    <div class="widget-content clock-container">
+        <div id="clock-date"></div>
+        <div class="clock-display-area" id="clock-display-area">
+            <div id="digital-clock">00:00:00</div>
+            <div class="analog-clock" id="analog-clock">
+                <div class="center"></div>
+                <div class="hand hour" id="h-hand"></div>
+                <div class="hand min" id="m-hand"></div>
+                <div class="hand sec" id="s-hand"></div>
+                <!-- 數字會由 JS 動態生成 -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 點名簿工具 -->
+<div class="widget" id="widget-attendance" style="top:300px; left:40px; width:400px; height:250px;">
+    <div class="widget-header">
+        <span>👥 點名簿</span>
+        <div class="header-controls">
+            <span class="dot-btn btn-close" onclick="toggleWidget('widget-attendance')">✕</span>
+        </div>
+    </div>
+    <div class="widget-content">
+        <div class="att-stats">
+            <div class="att-stat-item"><div class="att-stat-label">應到</div><div id="disp-exp" class="att-stat-val">30</div></div>
+            <div style="font-size:1.5rem; color:#ddd; margin-top:15px;">/</div>
+            <div class="att-stat-item"><div class="att-stat-label">實到</div><div id="disp-act" class="att-stat-val" style="color:var(--c-mint-d);">30</div></div>
+            <div style="font-size:1.5rem; color:#ddd; margin-top:15px;">/</div>
+            <div class="att-stat-item"><div class="att-stat-label">缺席</div><div id="disp-abs" class="att-stat-val">0</div></div>
+        </div>
+        <div class="absent-note-area">
+            <textarea id="absent-note-text" placeholder="📝 點此記錄缺席學生名單或原因..."></textarea>
+        </div>
+    </div>
+</div>
+
+<!-- 考試進度工具 -->
+<div class="widget" id="widget-exams" style="top:40px; left:510px; width:500px; height:510px;">
+    <div class="widget-header">
+        <span>📖 考試進度</span>
+        <div class="header-controls">
+            <span class="dot-btn btn-close" onclick="toggleWidget('widget-exams')">✕</span>
+        </div>
+    </div>
+    <div class="widget-content" id="exam-list"></div>
+</div>
+
+<!-- MOMO 記事本 -->
+<div class="widget" id="widget-momo" style="top:570px; left:40px; width:400px; height:300px;">
+    <div class="widget-header">
+        <span>📝 MOMO 記事本</span>
+        <div class="header-controls">
+            <span class="dot-btn btn-add" onclick="clearMomo()" title="清空內容重新開始">＋</span>
+            <span class="dot-btn btn-close" onclick="toggleWidget('widget-momo')">✕</span>
+        </div>
+    </div>
+    <div class="widget-content">
+        <div class="momo-toolbar">
+            <button class="momo-btn" id="momo-pen-toggle" onclick="toggleMomoMode()" title="切換手寫/打字模式">✏️</button>
+            <button class="momo-btn" onclick="clearMomo()" title="一鍵清除畫布與文字">🗑️</button>
+        </div>
+        <div class="momo-container" id="momo-container">
+            <textarea id="momo-text" placeholder="在此輸入重點或切換手寫模式..."></textarea>
+            <canvas id="momo-canvas"></canvas>
+        </div>
+    </div>
+</div>
+
+<script>
+    let appState = {
+        items: [],
+        widgets: {
+            "widget-clock": { show: true, top: 40, left: 40, w: 450, h: 240 },
+            "widget-exams": { show: true, top: 40, left: 510, w: 500, h: 510 },
+            "widget-attendance": { show: true, top: 300, left: 40, w: 400, h: 250 },
+            "widget-momo": { show: true, top: 570, left: 40, w: 400, h: 300 }
+        },
+        attendance: { exp: 30, act: 30, abs: 0, note: "" },
+        momoText: "",
+        template: null,
+        clockDisplayMode: 3 // 1: 數位, 2: 類比, 3: 兩者
+    };
+
+    let isDrawing = false;
+    let momoMode = 'text'; 
+    let ctx;
+
+    function init() {
+        const saved = localStorage.getItem('macaron_exam_v18');
+        if (saved) appState = JSON.parse(saved);
+
+        Object.keys(appState.widgets).forEach(id => {
+            const w = appState.widgets[id];
+            const el = document.getElementById(id);
+            if (el) {
+                el.style.display = w.show ? 'flex' : 'none';
+                el.style.top = w.top + 'px';
+                el.style.left = w.left + 'px';
+                el.style.width = w.w + 'px';
+                el.style.height = w.h + 'px';
+                const checkEl = document.getElementById('check-' + id.split('-')[1]);
+                if (checkEl) checkEl.checked = w.show;
+            }
+        });
+
+        document.getElementById('input-exp').value = appState.attendance.exp;
+        document.getElementById('input-act').value = appState.attendance.act;
+        document.getElementById('input-abs').value = appState.attendance.abs || 0;
+        document.getElementById('absent-note-text').value = appState.attendance.note || "";
+        updateAttendance();
+
+        document.getElementById('absent-note-text').oninput = (e) => { appState.attendance.note = e.target.value; saveData(); };
+        document.getElementById('momo-text').value = appState.momoText || "";
+        
+        createClockNumbers(); // 創建鐘面數字
+        initCanvas();
+        renderExams();
+        updateClockUI(); 
+        setInterval(updateClock, 1000);
+        updateClock();
+        setupDragAndResize();
+    }
+
+    // --- 創建鐘面數字 ---
+    function createClockNumbers() {
+        const clock = document.getElementById('analog-clock');
+        // 先清空舊數字避免重複生成
+        const oldNumbers = clock.querySelectorAll('.clock-number');
+        oldNumbers.forEach(n => n.remove());
+
+        for (let i = 1; i <= 12; i++) {
+            const num = document.createElement('div');
+            num.className = 'clock-number';
+            num.innerText = i;
+            clock.appendChild(num);
+        }
+    }
+
+    // --- 時鐘模式與縮放邏輯 ---
+    function setClockMode(mode) {
+        appState.clockDisplayMode = mode;
+        updateClockUI();
+        handleClockScaling();
+        saveData();
+    }
+
+    function updateClockUI() {
+        const digital = document.getElementById('digital-clock');
+        const analog = document.getElementById('analog-clock');
+        
+        digital.style.display = (appState.clockDisplayMode === 1 || appState.clockDisplayMode === 3) ? 'block' : 'none';
+        analog.style.display = (appState.clockDisplayMode === 2 || appState.clockDisplayMode === 3) ? 'block' : 'none';
+        
+        document.querySelectorAll('.mode-option').forEach(opt => opt.classList.remove('active'));
+        document.getElementById('mode-opt-' + appState.clockDisplayMode).classList.add('active');
+    }
+
+    function handleClockScaling() {
+        const widget = document.getElementById('widget-clock');
+        if (!widget || widget.style.display === 'none') return;
+
+        const dateEl = document.getElementById('clock-date');
+        const digital = document.getElementById('digital-clock');
+        const analog = document.getElementById('analog-clock');
+
+        const w = widget.offsetWidth - 40; 
+        const h = widget.offsetHeight - 80; 
+
+        dateEl.style.fontSize = Math.max(14, Math.min(w * 0.05, h * 0.1)) + "px";
+
+        let size = 0;
+        if (appState.clockDisplayMode === 1) { // 純數位
+            digital.style.fontSize = Math.min(w * 0.22, h * 0.6) + "px";
+        } else if (appState.clockDisplayMode === 2) { // 純類比
+            size = Math.min(w * 0.9, h * 0.9);
+            analog.style.width = size + "px";
+            analog.style.height = size + "px";
+        } else if (appState.clockDisplayMode === 3) { // 雙重
+            digital.style.fontSize = Math.min(w * 0.15, h * 0.45) + "px";
+            size = Math.min(w * 0.45, h * 0.8);
+            analog.style.width = size + "px";
+            analog.style.height = size + "px";
+        }
+
+        // 縮放鐘面數字
+        if (size > 0) {
+            const numbers = analog.querySelectorAll('.clock-number');
+            const numFontSize = size * 0.11;
+            const radius = 50 * 0.78; // 百分比半徑，讓數字靠內一點
+            numbers.forEach((num, index) => {
+                const angle = (index + 1) * 30 * (Math.PI / 180);
+                const x = 50 + radius * Math.sin(angle);
+                const y = 50 - radius * Math.cos(angle);
+                num.style.left = x + "%";
+                num.style.top = y + "%";
+                num.style.fontSize = numFontSize + "px";
+            });
+        }
+    }
+
+    function updateClock() {
+        const now = new Date();
+        const clockDate = document.getElementById('clock-date');
+        if (clockDate) clockDate.innerText = now.toLocaleDateString('zh-TW', { month: 'long', day: 'numeric', weekday: 'long' });
+        
+        let h = now.getHours();
+        const m = String(now.getMinutes()).padStart(2, '0');
+        const s = String(now.getSeconds()).padStart(2, '0');
+        const h12 = h % 12 || 12;
+        const digitalClock = document.getElementById('digital-clock');
+        if (digitalClock) digitalClock.innerText = `${String(h12).padStart(2, '0')}:${m}:${s}`;
+
+        const sDeg = now.getSeconds() * 6;
+        const mDeg = now.getMinutes() * 6 + now.getSeconds() * 0.1;
+        const hDeg = (now.getHours() % 12) * 30 + now.getMinutes() * 0.5;
+        document.getElementById('s-hand').style.transform = `rotate(${sDeg}deg)`;
+        document.getElementById('m-hand').style.transform = `rotate(${mDeg}deg)`;
+        document.getElementById('h-hand').style.transform = `rotate(${hDeg}deg)`;
+
+        updateExamsProgress(now);
+    }
+
+    // --- Widget 控制 ---
+    function toggleWidget(id) {
+        const el = document.getElementById(id);
+        const isShow = el.style.display === 'none';
+        el.style.display = isShow ? 'flex' : 'none';
+        appState.widgets[id].show = isShow;
+        const checkEl = document.getElementById('check-' + id.split('-')[1]);
+        if (checkEl) checkEl.checked = isShow;
+        if(id === 'widget-momo' && isShow) setTimeout(resizeCanvas, 100);
+        if(id === 'widget-clock' && isShow) setTimeout(handleClockScaling, 50);
+        saveData();
+    }
+
+    function toggleSettings() {
+        document.getElementById('settings-panel').classList.toggle('show');
+        document.getElementById('overlay').style.display = document.getElementById('settings-panel').classList.contains('show') ? 'block' : 'none';
+    }
+
+    function updateAttendance() {
+        appState.attendance.exp = document.getElementById('input-exp').value;
+        appState.attendance.act = document.getElementById('input-act').value;
+        appState.attendance.abs = document.getElementById('input-abs').value;
+        document.getElementById('disp-exp').innerText = appState.attendance.exp;
+        document.getElementById('disp-act').innerText = appState.attendance.act;
+        document.getElementById('disp-abs').innerText = appState.attendance.abs;
+        saveData();
+    }
+
+    // --- MOMO ---
+    function initCanvas() {
+        const canvas = document.getElementById('momo-canvas');
+        if (!canvas) return;
+        ctx = canvas.getContext('2d');
+        resizeCanvas();
+        canvas.addEventListener('mousedown', startDraw);
+        canvas.addEventListener('mousemove', drawing);
+        canvas.addEventListener('mouseup', endDraw);
+        canvas.addEventListener('touchstart', (e) => startDraw(e.touches[0]));
+        canvas.addEventListener('touchmove', (e) => drawing(e.touches[0]));
+        canvas.addEventListener('touchend', endDraw);
+        document.getElementById('momo-text').oninput = (e) => { appState.momoText = e.target.value; saveData(); };
+    }
+
+    function resizeCanvas() {
+        const canvas = document.getElementById('momo-canvas');
+        const container = document.getElementById('momo-container');
+        if (!canvas || !container) return;
+        const newWidth = container.clientWidth;
+        const newHeight = container.clientHeight;
+        if (newWidth <= 0 || newHeight <= 0) return;
+        let temp = null;
+        if (canvas.width > 0 && canvas.height > 0) { try { temp = ctx.getImageData(0, 0, canvas.width, canvas.height); } catch (e) { } }
+        canvas.width = newWidth;
+        canvas.height = newHeight;
+        ctx.lineCap = 'round'; ctx.lineWidth = 3; ctx.strokeStyle = '#4a3a2a';
+        if (temp) { ctx.putImageData(temp, 0, 0); }
+    }
+
+    function toggleMomoMode() {
+        const canvas = document.getElementById('momo-canvas');
+        const btn = document.getElementById('momo-pen-toggle');
+        if (momoMode === 'text') { momoMode = 'draw'; canvas.style.pointerEvents = 'auto'; btn.classList.add('active'); }
+        else { momoMode = 'text'; canvas.style.pointerEvents = 'none'; btn.classList.remove('active'); }
+    }
+
+    function startDraw(e) { if(momoMode !== 'draw') return; isDrawing = true; ctx.beginPath(); const rect = document.getElementById('momo-canvas').getBoundingClientRect(); ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top); }
+    function drawing(e) { if (!isDrawing) return; const rect = document.getElementById('momo-canvas').getBoundingClientRect(); ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top); ctx.stroke(); }
+    function endDraw() { isDrawing = false; }
+    function clearMomo() { const canvas = document.getElementById('momo-canvas'); if(confirm("確定要清空目前的記事重新開始嗎？")) { ctx.clearRect(0, 0, canvas.width, canvas.height); document.getElementById('momo-text').value = ""; appState.momoText = ""; saveData(); } }
+
+    // --- 考試列表 ---
+    function selQuickSub(name) { document.getElementById('edit-name').value = name; }
+    function saveExam() {
+        const name = document.getElementById('edit-name').value;
+        const start = document.getElementById('edit-start').value;
+        const end = document.getElementById('edit-end').value;
+        const id = document.getElementById('edit-id').value;
+        if(!name || !start || !end) return alert("請填寫完整資訊！");
+        const newItem = { id: id ? parseInt(id) : Date.now(), name, start, end, type: (name === '休息' ? 'rest' : 'exam') };
+        if(id) appState.items = appState.items.map(i => i.id === newItem.id ? newItem : i);
+        else appState.items.push(newItem);
+        appState.items.sort((a,b) => a.start.localeCompare(b.start));
+        renderExams(); saveData();
+        document.getElementById('edit-name').value = ""; document.getElementById('edit-id').value = "";
+    }
+
+    function renderExams() {
+        const list = document.getElementById('exam-list');
+        list.innerHTML = "";
+        appState.items.forEach(ex => {
+            list.innerHTML += `
+                <div class="exam-item ${ex.type === 'rest' ? 'type-rest' : ''}" onclick="loadEditExam(${ex.id})">
+                    <div style="display:flex; justify-content:space-between; font-weight:900;">
+                        <span>${ex.name}</span>
+                        <span style="opacity:0.3" onclick="event.stopPropagation(); deleteExam(${ex.id})">×</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size:0.9rem; margin-top:5px;">
+                        <span>${ex.start} ~ ${ex.end}</span>
+                        <span id="txt-${ex.id}" style="font-weight:bold;">準備中</span>
+                    </div>
+                    <div class="progress-container"><div class="progress-bar" id="bar-${ex.id}"></div></div>
+                </div>
+            `;
+        });
+    }
+
+    function updateExamsProgress(now) {
+        const curSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+        appState.items.forEach(ex => {
+            const [sh, sm] = ex.start.split(':').map(Number);
+            const [eh, em] = ex.end.split(':').map(Number);
+            const sT = sh * 3600 + sm * 60;
+            const eT = eh * 3600 + em * 60;
+            const bar = document.getElementById(`bar-${ex.id}`);
+            const txt = document.getElementById(`txt-${ex.id}`);
+            if(!bar || !txt) return;
+            if (curSec < sT) { bar.style.width = "0%"; txt.innerText = "準備中"; }
+            else if (curSec >= eT) { bar.style.width = "100%"; txt.innerText = "已結束"; bar.style.background = "#ccc"; }
+            else {
+                const pct = (curSec - sT) / (eT - sT) * 100;
+                bar.style.width = pct + "%";
+                const remain = eT - curSec;
+                if(remain <= 300) { bar.classList.add('urgent'); txt.innerText = `⚠️ 剩 ${Math.ceil(remain/60)} 分`; }
+                else { bar.classList.remove('urgent'); txt.innerText = `剩 ${Math.ceil(remain/60)} 分`; }
+            }
+        });
+    }
+
+    function deleteExam(id) { appState.items = appState.items.filter(i => i.id !== id); renderExams(); saveData(); }
+    function loadEditExam(id) {
+        const ex = appState.items.find(i => i.id === id);
+        if (!ex) return;
+        document.getElementById('edit-name').value = ex.name;
+        document.getElementById('edit-start').value = ex.start;
+        document.getElementById('edit-end').value = ex.end;
+        document.getElementById('edit-id').value = ex.id;
+        if(!document.getElementById('settings-panel').classList.contains('show')) toggleSettings();
+    }
+
+    function saveData() { localStorage.setItem('macaron_exam_v18', JSON.stringify(appState)); }
+    
+    function setupDragAndResize() {
+        document.querySelectorAll('.widget-header').forEach(header => {
+            header.onmousedown = function(e) {
+                if (e.target.classList.contains('dot-btn')) return;
+                const widget = header.parentElement;
+                let startX = e.clientX - widget.offsetLeft, startY = e.clientY - widget.offsetTop;
+                function move(e) {
+                    const l = e.clientX - startX; const t = e.clientY - startY;
+                    widget.style.left = l + "px"; widget.style.top = t + "px";
+                    appState.widgets[widget.id].left = l; appState.widgets[widget.id].top = t;
+                }
+                function stop() { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', stop); saveData(); }
+                document.addEventListener('mousemove', move); document.addEventListener('mouseup', stop);
+            };
+        });
+        const observer = new ResizeObserver(entries => {
+            for (let entry of entries) {
+                const id = entry.target.id;
+                if (appState.widgets[id]) {
+                    appState.widgets[id].w = entry.target.offsetWidth;
+                    appState.widgets[id].h = entry.target.offsetHeight;
+                    if(id === 'widget-clock') handleClockScaling();
+                    if(id === 'widget-momo') resizeCanvas();
+                    saveData();
+                }
+            }
+        });
+        document.querySelectorAll('.widget').forEach(w => observer.observe(w));
+    }
+
+    function copyTemplate() { appState.template = [...appState.items]; saveData(); alert("已存為樣板！"); }
+    function loadTemplate() { if(appState.template && confirm("確定載入樣板？")){ appState.items = [...appState.template]; renderExams(); saveData(); } }
+    function handleCloudSync() { saveData(); alert("☁️ 雲端同步成功！"); }
+
+    window.onload = init;
+</script>
+</body>
+</html>

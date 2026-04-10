@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>科任教師行動儀表板 V9.7 - 完備場景版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/gridstack@10.0.1/dist/gridstack.min.css" rel="stylesheet"/>
+    <script src="https://cdn.jsdelivr.net/npm/gridstack@10.0.1/dist/gridstack-all.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Noto+Sans+TC:wght@400;900&family=Quicksand:wght@700&display=swap');
+
+        :root {
+            --theme-primary: #fb923c;
+            --theme-bg: #fff7ed;
+            --theme-text: #9a3412;
+            --theme-border: #f97316;
+            --theme-card: rgba(255, 255, 255, 0.75);
+        }
+
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            width: 100vw;
+            background-color: var(--theme-bg);
+            background-size: cover;
+            background-position: center;
+            color: var(--theme-text);
+            overflow: hidden;
+            transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* 模組卡片樣式 */
+        .widget-card {
+            background: var(--theme-card);
+            backdrop-filter: blur(15px);
+            border: 6px solid var(--theme-border);
+            border-radius: 2.5rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        /* 選取狀態 */
+        .grid-stack-item.selected .widget-card {
+            border-color: #ef4444 !important;
+            box-shadow: 0 0 35px rgba(239, 68, 68, 0.4);
+        }
+
+        /* 隱藏式縮放手柄 */
+        .ui-resizable-handle {
+            background: transparent !important;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .grid-stack-item.selected .ui-resizable-handle {
+            opacity: 1;
+        }
+        .grid-stack-item.selected .ui-resizable-se {
+            width: 25px;
+            height: 25px;
+            right: 12px;
+            bottom: 12px;
+            background-image: radial-gradient(circle, var(--theme-border) 2px, transparent 2px) !important;
+            background-size: 6px 6px !important;
+            display: block !important;
+        }
+
+        /* MOMO 區域 */
+        .momo-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.2);
+        }
+        .momo-textarea {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: transparent;
+            border: none;
+            padding: 1.5rem;
+            resize: none;
+            z-index: 5;
+            font-size: 1.15rem;
+            line-height: 1.6;
+            color: var(--theme-text);
+            font-weight: 500;
+        }
+        .momo-textarea:focus { outline: none; }
+        .momo-canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 10;
+            cursor: crosshair;
+            touch-action: none;
+            pointer-events: none;
+        }
+        .momo-canvas.active {
+            pointer-events: auto;
+        }
+
+        /* 雙線邊框時鐘 */
+        .analog-clock {
+            width: 155px;
+            height: 155px;
+            border-radius: 50%;
+            border: 8px double var(--theme-border);
+            background: #fff;
+            position: relative;
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.05), 0 5px 15px rgba(0,0,0,0.1);
+            flex-shrink: 0;
+        }
+        .clock-num {
+            position: absolute;
+            width: 100%; height: 100%;
+            text-align: center;
+            font-weight: 900;
+            font-size: 1.15rem;
+            color: #333;
+            padding: 6px;
+        }
+        .hand { position: absolute; bottom: 50%; left: 50%; transform-origin: bottom; border-radius: 10px; background: #333; }
+        .hour-hand { width: 6px; height: 38px; margin-left: -3px; z-index: 3; }
+        .min-hand { width: 4px; height: 55px; margin-left: -2px; background: #444; z-index: 2; }
+        .sec-hand { width: 2px; height: 65px; margin-left: -1px; background: #ef4444; z-index: 1; }
+        .center-dot { position: absolute; top: 50%; left: 50%; width: 10px; height: 10px; border-radius: 50%; background: #fff; transform: translate(-50%, -50%); z-index: 4; border: 2px solid #333; }
+
+        /* 工具列 */
+        .toolbar-wrapper {
+            position: fixed;
+            top: 1.5rem;
+            right: 0;
+            z-index: 4000;
+            display: flex;
+            align-items: center;
+            transform: translateX(calc(100% - 45px));
+            transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .toolbar-wrapper.active {
+            transform: translateX(-1.5rem);
+        }
+        .toolbar-handle {
+            width: 45px;
+            height: 65px;
+            background: var(--theme-border);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 1.5rem 0 0 1.5rem;
+            cursor: pointer;
+            box-shadow: -5px 0 15px rgba(0,0,0,0.1);
+        }
+        .floating-toolbar {
+            background: white;
+            padding: 0.85rem;
+            border-radius: 2.2rem;
+            display: flex;
+            gap: 0.85rem;
+            border: 4px solid var(--theme-border);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.15);
+        }
+
+        .tool-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: #fdfdfd;
+            color: var(--theme-text);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+        .tool-btn:hover { border-color: var(--theme-border); transform: scale(1.1) translateY(-2px); }
+
+        /* 垃圾桶 */
+        #trash-can {
+            position: fixed;
+            bottom: 2.5rem;
+            right: 2.5rem;
+            width: 85px;
+            height: 85px;
+            background: #f87171;
+            color: white;
+            border-radius: 50%;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.2rem;
+            box-shadow: 0 12px 35px rgba(248, 113, 113, 0.5);
+            cursor: pointer;
+            z-index: 5000;
+            animation: popIn 0.3s ease-out;
+        }
+        @keyframes popIn {
+            0% { transform: scale(0); }
+            80% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        /* 風格切換球 */
+        .theme-dot { width: 30px; height: 30px; border-radius: 50%; cursor: pointer; border: 3px solid white; transition: all 0.2s; box-shadow: 0 3px 6px rgba(0,0,0,0.15); }
+        .theme-dot:hover { transform: scale(1.25) translateY(-3px); }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body id="body-bg">
+
+    <div class="toolbar-wrapper" id="toolbar-wrap">
+        <div class="toolbar-handle" onclick="toggleToolbar()">
+            <i class="fas fa-magic"></i>
+        </div>
+        <div class="floating-toolbar">
+            <button onclick="addMomo()" class="tool-btn" title="新增隨手記"><i class="fas fa-feather-alt"></i></button>
+            <button onclick="addTimetable()" class="tool-btn" title="新增課表"><i class="fas fa-calendar-alt"></i></button>
+            <button onclick="addNewTimer()" class="tool-btn" title="新增計時器"><i class="fas fa-hourglass-half"></i></button>
+            
+            <div class="flex items-center gap-2 px-3 border-l-2 border-gray-100">
+                <div onclick="applyTheme(0)" class="theme-dot bg-orange-400" title="陽光溫暖"></div>
+                <div onclick="applyTheme(1)" class="theme-dot bg-cyan-400" title="小島動漫"></div>
+                <div onclick="applyTheme(2)" class="theme-dot bg-amber-700" title="吉普利"></div>
+                <div onclick="applyTheme(3)" class="theme-dot bg-gray-500" title="工業圖書館"></div>
+                <div onclick="applyTheme(4)" class="theme-dot bg-green-700" title="綠色森林"></div>
+                <div onclick="applyTheme(5)" class="theme-dot bg-blue-600" title="海洋藍天"></div>
+            </div>
+
+            <button onclick="changeBackground()" class="tool-btn ml-1" title="隨機風景"><i class="fas fa-sync-alt"></i></button>
+            <button onclick="resetLayout()" class="tool-btn" title="重置畫面"><i class="fas fa-home"></i></button>
+        </div>
+    </div>
+
+    <div id="trash-can" onclick="deleteSelected()">
+        <i class="fas fa-trash-restore-alt"></i>
+    </div>
+
+    <input type="file" id="bg-upload" class="hidden" accept="image/*">
+
+    <div class="main-container h-full p-8">
+        <div class="grid-stack"></div>
+    </div>
+
+    <audio id="alert-sound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
+
+    <script>
+        let grid = null;
+        let selectedId = null;
+
+        const themes = [
+            { id: 'sunny', primary: '#fb923c', bg: '#fff7ed', text: '#9a3412', border: '#f97316', card: 'rgba(255, 255, 255, 0.75)', img: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1920&q=80' },
+            { id: 'anime', primary: '#22d3ee', bg: '#ecfeff', text: '#083344', border: '#06b6d4', card: 'rgba(255, 255, 255, 0.8)', img: 'https://images.unsplash.com/photo-1559128010-7c1ad6e1b6a5?auto=format&fit=crop&w=1920&q=80' },
+            { id: 'ghibli', primary: '#b45309', bg: '#fef3c7', text: '#451a03', border: '#d97706', card: 'rgba(255, 255, 255, 0.6)', img: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1920&q=80' },
+            { id: 'industrial', primary: '#6b7280', bg: '#f3f4f6', text: '#1f2937', border: '#9ca3af', card: 'rgba(255, 255, 255, 0.85)', img: 'https://images.unsplash.com/photo-1507842217343-583bb7270b66?auto=format&fit=crop&w=1920&q=80' },
+            { id: 'forest', primary: '#166534', bg: '#f0fdf4', text: '#14532d', border: '#22c55e', card: 'rgba(255, 255, 255, 0.7)', img: 'https://images.unsplash.com/photo-1448375033058-464b1e4d65b6?auto=format&fit=crop&w=1920&q=80' },
+            { id: 'ocean', primary: '#0ea5e9', bg: '#f0f9ff', text: '#0c4a6e', border: '#0284c7', card: 'rgba(255, 255, 255, 0.8)', img: 'https://images.unsplash.com/photo-1505118380757-91f5f45d8de4?auto=format&fit=crop&w=1920&q=80' }
+        ];
+
+        function applyTheme(index) {
+            const t = themes[index];
+            document.documentElement.style.setProperty('--theme-primary', t.primary);
+            document.documentElement.style.setProperty('--theme-bg', t.bg);
+            document.documentElement.style.setProperty('--theme-text', t.text);
+            document.documentElement.style.setProperty('--theme-border', t.border);
+            document.documentElement.style.setProperty('--theme-card', t.card);
+            
+            if (!localStorage.getItem('teacher_v9_custom_bg')) {
+                document.body.style.backgroundImage = `linear-gradient(rgba(255,255,255,0.15), rgba(255,255,255,0.15)), url('${t.img}')`;
+            }
+            localStorage.setItem('teacher_v9_theme_idx', index);
+        }
+
+        function toggleToolbar() {
+            document.getElementById('toolbar-wrap').classList.toggle('active');
+        }
+
+        function initGrid() {
+            grid = GridStack.init({
+                float: true,
+                cellHeight: 100,
+                margin: 20,
+                resizable: { handles: 'all' },
+                staticGrid: false
+            });
+
+            grid.on('change', () => saveSystemState());
+            
+            document.body.addEventListener('mousedown', (e) => {
+                const item = e.target.closest('.grid-stack-item');
+                if (item) {
+                    selectItem(item);
+                } else if (!e.target.closest('.floating-toolbar') && !e.target.closest('#trash-can') && !e.target.closest('.toolbar-wrapper')) {
+                    deselectAll();
+                }
+            });
+
+            const savedTheme = localStorage.getItem('teacher_v9_theme_idx');
+            applyTheme(savedTheme !== null ? parseInt(savedTheme) : 0);
+
+            loadSystemState();
+
+            const bgIn = document.getElementById('bg-upload');
+            if (bgIn) {
+                bgIn.addEventListener('change', e => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = ev => {
+                            const url = ev.target.result;
+                            document.body.style.backgroundImage = `url('${url}')`;
+                            localStorage.setItem('teacher_v9_custom_bg', url);
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                });
+            }
+        }
+
+        function deselectAll() {
+            document.querySelectorAll('.grid-stack-item').forEach(el => el.classList.remove('selected'));
+            document.getElementById('trash-can').style.display = 'none';
+            selectedId = null;
+        }
+
+        function selectItem(el) {
+            deselectAll();
+            el.classList.add('selected');
+            selectedId = el.getAttribute('gs-id');
+            document.getElementById('trash-can').style.display = 'flex';
+        }
+
+        function deleteSelected() {
+            if (selectedId) {
+                const target = document.querySelector(`[gs-id="${selectedId}"]`);
+                if (target) {
+                    grid.removeWidget(target);
+                    deselectAll();
+                    saveSystemState();
+                }
+            }
+        }
+
+        function createWidgetBase(id, contentHtml) {
+            const el = document.createElement('div');
+            el.setAttribute('gs-id', id);
+            el.className = 'grid-stack-item';
+            el.innerHTML = `<div class="grid-stack-item-content">
+                <div class="widget-card">${contentHtml}</div>
+            </div>`;
+            return el;
+        }
+
+        function addClock(x=0, y=0, w=6, h=4) {
+            const id = 'clock-' + Date.now();
+            let nums = '';
+            for(let i=1; i<=12; i++) {
+                let angle = i * 30;
+                nums += `<div class="clock-num" style="transform: rotate(${angle}deg);"><span style="display:inline-block; transform: rotate(-${angle}deg);">${i}</span></div>`;
+            }
+            const html = `
+                <div class="flex items-center justify-center h-full gap-10 px-10" onmousedown="selectItem(this.closest('.grid-stack-item'))">
+                    <div class="flex flex-col items-center">
+                        <p id="date-str-${id}" class="font-black text-sm mb-3 opacity-60 uppercase tracking-widest">載入日期中...</p>
+                        <div id="digi-clock-${id}" class="digital-time text-6xl md:text-7xl font-black">00:00:00</div>
+                    </div>
+                    <div class="analog-clock hidden lg:block">
+                        ${nums}
+                        <div class="hand hour-hand" id="h-h-${id}"></div>
+                        <div class="hand min-hand" id="m-h-${id}"></div>
+                        <div class="hand sec-hand" id="s-h-${id}"></div>
+                        <div class="center-dot"></div>
+                    </div>
+                </div>
+            `;
+            grid.addWidget(createWidgetBase(id, html), { x, y, w, h });
+            startClockInterval(id);
+        }
+
+        function toggleMomoMode(id) {
+            const btn = document.getElementById(`mode-btn-${id}`);
+            const canvas = document.getElementById(`canvas-${id}`);
+            const widgetEl = document.querySelector(`[gs-id="${id}"]`);
+            const isActive = canvas.classList.toggle('active');
+            
+            if (isActive) {
+                btn.classList.add('bg-orange-600', 'text-white');
+                btn.innerHTML = '<i class="fas fa-pen-nib"></i>';
+                grid.movable(widgetEl, false);
+                grid.resizable(widgetEl, false);
+            } else {
+                btn.classList.remove('bg-orange-600', 'text-white');
+                btn.innerHTML = '<i class="fas fa-pencil-alt"></i>';
+                grid.movable(widgetEl, true);
+                grid.resizable(widgetEl, true);
+            }
+        }
+
+        function addMomo(x=0, y=0, w=3, h=3, textData = '', drawingData = null) {
+            const id = 'momo-' + Date.now();
+            const html = `
+                <div class="momo-container" onmousedown="if(!document.getElementById('canvas-${id}').classList.contains('active')) selectItem(this.closest('.grid-stack-item'))">
+                    <textarea id="text-${id}" class="momo-textarea no-scrollbar" placeholder="打點字或畫點圖...">${textData}</textarea>
+                    <canvas id="canvas-${id}" class="momo-canvas"></canvas>
+                    <div class="absolute bottom-5 right-5 z-[25] flex gap-3">
+                        <button id="mode-btn-${id}" onclick="toggleMomoMode('${id}')" class="bg-white/90 w-12 h-12 rounded-full shadow-lg text-orange-600 transition hover:scale-110" title="筆耕模式"><i class="fas fa-pencil-alt"></i></button>
+                        <button onclick="clearCanvas('canvas-${id}')" class="bg-white/90 w-12 h-12 rounded-full shadow-lg text-red-500 transition hover:scale-110" title="清除筆跡"><i class="fas fa-eraser"></i></button>
+                    </div>
+                </div>
+            `;
+            grid.addWidget(createWidgetBase(id, html), { x, y, w, h });
+            initCanvas(`canvas-${id}`, drawingData);
+            document.getElementById(`text-${id}`).addEventListener('input', () => saveSystemState());
+        }
+
+        // 新增課表小工具
+        function addTimetable(x=0, y=4, w=4, h=6, imgData = null) {
+            const id = 'tt-' + Date.now();
+            const html = `
+                <div class="flex-grow p-6 relative flex flex-col items-center justify-center cursor-pointer group" onclick="document.getElementById('input-${id}').click()" onmousedown="selectItem(this.closest('.grid-stack-item'))">
+                    <div id="ph-${id}" class="text-center opacity-30 ${imgData ? 'hidden' : ''}">
+                        <i class="fas fa-image text-5xl mb-4 block"></i>
+                        <p class="text-sm font-bold">點擊上傳課表</p>
+                    </div>
+                    <img id="img-${id}" src="${imgData || ''}" class="${imgData ? '' : 'hidden'} w-full h-full object-contain rounded-2xl shadow-sm" />
+                    <input type="file" id="input-${id}" class="hidden" accept="image/*" onchange="handleTimetableUpload(this, '${id}')">
+                </div>
+            `;
+            grid.addWidget(createWidgetBase(id, html), { x, y, w, h });
+        }
+
+        function handleTimetableUpload(input, id) {
+            const file = input.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = e => {
+                    const img = document.getElementById(`img-${id}`);
+                    const ph = document.getElementById(`ph-${id}`);
+                    img.src = e.target.result;
+                    img.classList.remove('hidden');
+                    ph.classList.add('hidden');
+                    saveSystemState();
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function addNewTimer(x=0, y=0, w=3, h=3, config = null) {
+            const id = 'timer-' + Date.now();
+            const timerData = config || { time: 300, title: '專注計時', color: '#ea580c' };
+            const html = `
+                <div class="p-8 flex flex-col justify-center h-full text-center" onmousedown="selectItem(this.closest('.grid-stack-item'))">
+                    <input type="text" value="${timerData.title}" class="bg-transparent text-center font-black text-xl mb-5 outline-none border-b-2 border-transparent focus:border-theme-primary">
+                    <div id="t-disp-${id}" class="text-6xl md:text-7xl font-black mb-10">05:00</div>
+                    <div class="flex justify-center gap-8">
+                        <button onclick="toggleTimer('${id}')" id="t-btn-${id}" class="w-18 h-18 bg-white/50 rounded-full flex items-center justify-center hover:bg-theme-primary hover:text-white transition shadow-xl"><i class="fas fa-play text-2xl"></i></button>
+                        <button onclick="resetTimer('${id}')" class="w-18 h-18 bg-white/50 rounded-full flex items-center justify-center hover:bg-gray-200 transition shadow-xl"><i class="fas fa-redo text-2xl"></i></button>
+                    </div>
+                </div>
+            `;
+            grid.addWidget(createWidgetBase(id, html), { x, y, w, h });
+            initTimerLogic(id, timerData);
+        }
+
+        function initCanvas(canvasId, data = null) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            function resize() {
+                const parent = canvas.closest('.momo-container');
+                if(!parent) return;
+                const rect = parent.getBoundingClientRect();
+                const w = Math.floor(rect.width), h = Math.floor(rect.height);
+                if (w < 1 || h < 1) return;
+                let temp = null;
+                if (canvas.width > 0 && canvas.height > 0) {
+                    try { temp = ctx.getImageData(0, 0, canvas.width, canvas.height); } catch (e) { temp = null; }
+                }
+                canvas.width = w; canvas.height = h;
+                if (temp) ctx.putImageData(temp, 0, 0);
+                ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.strokeStyle = '#2d3748';
+            }
+            setTimeout(resize, 150);
+            let drawing = false;
+            if (data) { const img = new Image(); img.onload = () => ctx.drawImage(img, 0, 0); img.src = data; }
+            const getPos = (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const clientX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
+                const clientY = e.clientY || (e.touches ? e.touches[0].clientY : 0);
+                return { x: clientX - rect.left, y: clientY - rect.top };
+            };
+            const start = (e) => { if(canvas.classList.contains('active')) { drawing = true; draw(e); } };
+            const stop = () => { if(drawing) { drawing = false; ctx.beginPath(); saveSystemState(); } };
+            const draw = (e) => {
+                if (!drawing) return;
+                const pos = getPos(e);
+                ctx.lineTo(pos.x, pos.y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(pos.x, pos.y);
+            };
+            canvas.addEventListener('mousedown', start); canvas.addEventListener('mousemove', draw);
+            window.addEventListener('mouseup', stop); canvas.addEventListener('touchstart', start);
+            canvas.addEventListener('touchmove', draw); canvas.addEventListener('touchend', stop);
+            new ResizeObserver(entries => { if (entries[0].contentRect.width > 0 && entries[0].contentRect.height > 0) resize(); }).observe(canvas.parentElement);
+        }
+
+        function clearCanvas(id) {
+            const canvas = document.getElementById(id);
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0,0,canvas.width, canvas.height);
+            saveSystemState();
+        }
+
+        let timerStore = {};
+        function initTimerLogic(id, data) {
+            timerStore[id] = { ...data, remaining: data.time, isRunning: false, interval: null };
+            updateTimerUI(id);
+        }
+
+        function toggleTimer(id) {
+            const t = timerStore[id];
+            const btn = document.getElementById(`t-btn-${id}`);
+            if (t.isRunning) {
+                clearInterval(t.interval); t.isRunning = false;
+                btn.innerHTML = '<i class="fas fa-play text-2xl"></i>';
+            } else {
+                if (t.remaining <= 0) return;
+                t.isRunning = true; btn.innerHTML = '<i class="fas fa-pause text-2xl"></i>';
+                t.interval = setInterval(() => {
+                    t.remaining--; updateTimerUI(id);
+                    if (t.remaining <= 0) {
+                        clearInterval(t.interval); t.isRunning = false;
+                        document.getElementById('alert-sound').play();
+                        btn.innerHTML = '<i class="fas fa-play text-2xl"></i>';
+                    }
+                }, 1000);
+            }
+        }
+
+        function resetTimer(id) {
+            const t = timerStore[id]; clearInterval(t.interval);
+            t.isRunning = false; t.remaining = t.time;
+            document.getElementById(`t-btn-${id}`).innerHTML = '<i class="fas fa-play text-2xl"></i>';
+            updateTimerUI(id);
+        }
+
+        function updateTimerUI(id) {
+            const t = timerStore[id];
+            const disp = document.getElementById(`t-disp-${id}`);
+            const m = Math.floor(t.remaining / 60), s = t.remaining % 60;
+            disp.textContent = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+            if (t.remaining === 0) disp.classList.add('text-red-600', 'animate-pulse');
+            else disp.classList.remove('text-red-600', 'animate-pulse');
+        }
+
+        function startClockInterval(id) {
+            setInterval(() => {
+                const now = new Date();
+                const h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
+                const dClock = document.getElementById(`digi-clock-${id}`);
+                const dateS = document.getElementById(`date-str-${id}`);
+                if(dClock) dClock.textContent = now.toLocaleTimeString('zh-TW', { hour12: false });
+                if(dateS) dateS.textContent = now.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+                const hh = document.getElementById(`h-h-${id}`), mh = document.getElementById(`m-h-${id}`), sh = document.getElementById(`s-h-${id}`);
+                if(hh) {
+                    hh.style.transform = `rotate(${(h%12)*30 + m*0.5}deg)`;
+                    mh.style.transform = `rotate(${m*6}deg)`;
+                    sh.style.transform = `rotate(${s*6}deg)`;
+                }
+            }, 1000);
+        }
+
+        function saveSystemState() {
+            const layout = grid.save(false);
+            const extraData = {};
+            document.querySelectorAll('.grid-stack-item').forEach(item => {
+                const idAttr = item.getAttribute('gs-id');
+                if (idAttr.startsWith('momo')) {
+                    const canvas = item.querySelector('canvas');
+                    const textarea = item.querySelector('textarea');
+                    extraData[idAttr] = { text: textarea.value, drawing: canvas.toDataURL() };
+                } else if (idAttr.startsWith('tt')) {
+                    const img = item.querySelector('img');
+                    extraData[idAttr] = { img: img.src };
+                }
+            });
+            localStorage.setItem('teacher_v9_layout', JSON.stringify(layout));
+            localStorage.setItem('teacher_v9_extra', JSON.stringify(extraData));
+        }
+
+        function loadSystemState() {
+            const layout = JSON.parse(localStorage.getItem('teacher_v9_layout'));
+            const extra = JSON.parse(localStorage.getItem('teacher_v9_extra')) || {};
+            const customBg = localStorage.getItem('teacher_v9_custom_bg');
+            if (customBg) document.body.style.backgroundImage = `url('${customBg}')`;
+
+            if (layout && layout.length > 0) {
+                layout.forEach(w => {
+                    if (w.id.startsWith('clock')) addClock(w.x, w.y, w.w, w.h);
+                    else if (w.id.startsWith('momo')) {
+                        const data = extra[w.id] || { text: '', drawing: null };
+                        addMomo(w.x, w.y, w.w, w.h, data.text, data.drawing);
+                    }
+                    else if (w.id.startsWith('tt')) {
+                        const data = extra[w.id] || { img: null };
+                        addTimetable(w.x, w.y, w.w, w.h, data.img);
+                    }
+                    else if (w.id.startsWith('timer')) addNewTimer(w.x, w.y, w.w, w.h);
+                });
+            } else {
+                addClock(0, 0, 8, 4);
+                addTimetable(8, 0, 4, 6);
+                addMomo(0, 4, 4, 4);
+                addNewTimer(4, 4, 4, 4);
+            }
+        }
+
+        function resetLayout() { localStorage.clear(); window.location.reload(); }
+        function changeBackground() {
+            const bgs = themes.map(t => t.img);
+            const random = bgs[Math.floor(Math.random()*bgs.length)];
+            document.body.style.backgroundImage = `linear-gradient(rgba(255,255,255,0.1), rgba(255,255,255,0.1)), url('${random}')`;
+            localStorage.setItem('teacher_v9_custom_bg', random);
+        }
+
+        window.onload = initGrid;
+    </script>
+</body>
+</html>
