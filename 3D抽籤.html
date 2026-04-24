@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D 互動數字宇宙抽籤系統 - 教學相長</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #020205; font-family: "Microsoft JhengHei", sans-serif; color: white; }
+        #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; cursor: grab; }
+        #canvas-container:active { cursor: grabbing; }
+        
+        /* UI 疊層 */
+        .ui-layer { position: relative; z-index: 10; pointer-events: none; height: 100vh; display: flex; flex-direction: column; justify-content: space-between; }
+        .pointer-events-auto { pointer-events: auto; }
+
+        /* 特效 */
+        .glow-text { text-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 0 0 20px rgba(0, 255, 255, 0.5); }
+        .glass-panel { background: rgba(15, 25, 45, 0.9); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 30px; }
+
+        /* 滾動條 */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: rgba(0, 255, 255, 0.3); border-radius: 10px; }
+
+        /* 動畫 */
+        .modal-enter { animation: fadeIn 0.4s cubic-bezier(0.23, 1, 0.32, 1); }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.9) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+
+        /* 卡片樣式 */
+        .winner-card {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: inset 0 0 15px rgba(255, 255, 255, 0.05);
+            transition: all 0.3s ease;
+        }
+        .winner-card:hover {
+            background: rgba(0, 255, 255, 0.15);
+            border-color: rgba(0, 255, 255, 0.3);
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <div class="ui-layer p-6">
+        <!-- 上方資訊區 -->
+        <div class="flex justify-between items-start pointer-events-auto">
+            <div class="text-left bg-black/40 p-4 rounded-2xl border border-white/5 backdrop-blur-md">
+                <div id="poolStatus" class="text-cyan-300/90 text-[10px] tracking-widest uppercase mb-1">宇宙探索進度</div>
+                <div class="text-sm font-bold flex flex-col gap-2">
+                    <div>池中剩餘：<span id="remainingCount" class="text-lg text-white">--</span> 人</div>
+                    <button id="viewWinnersBtn" onclick="toggleWinnerModal()" class="hidden bg-pink-900/60 hover:bg-pink-700 px-3 py-1.5 rounded-lg text-[11px] transition border border-pink-500/40 shadow-lg shadow-pink-900/20">🏆 檢視中獎名單</button>
+                </div>
+                <div id="prizeStatus" class="mt-1 text-pink-400 text-[10px] font-medium"></div>
+            </div>
+            <div class="text-center flex-grow">
+                <h1 id="displayTitle" class="text-3xl font-bold tracking-[0.3em] glow-text">互動數字宇宙</h1>
+            </div>
+            <div class="w-40"></div> 
+        </div>
+
+        <!-- 中間抽籤結果顯示 (即時結果視窗) -->
+        <div class="flex-grow flex items-center justify-center">
+            <div id="resultDisplay" class="hidden pointer-events-auto glass-panel p-10 w-full max-w-5xl max-h-[85vh] flex flex-col items-center modal-enter shadow-[0_0_100px_rgba(0,255,255,0.15)] border-cyan-500/30">
+                <div class="text-2xl text-cyan-300 mb-8 font-light tracking-[0.5em] glow-text">恭喜獲選</div>
+                
+                <!-- 結果清單容器 -->
+                <div id="immediateWinnerList" class="w-full overflow-y-auto flex flex-wrap items-center justify-center gap-4 p-2">
+                    <!-- 中獎名字會在此生成卡片 -->
+                </div>
+
+                <div class="mt-10 flex flex-col items-center gap-2">
+                    <button onclick="hideResult()" class="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 px-12 py-3 rounded-full font-bold text-sm tracking-widest transition shadow-lg active:scale-95">關閉視窗</button>
+                    <button onclick="hideResult()" class="text-[10px] text-white/30 hover:text-white transition underline">或點擊此處返回</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 下方控制列 -->
+        <div class="flex justify-center items-center gap-4 pb-8 pointer-events-auto">
+            <button onclick="toggleSettings()" class="glass-panel px-6 py-3 hover:bg-cyan-900/40 transition flex items-center gap-2 group">
+                <svg class="group-hover:rotate-90 transition-transform duration-500" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                宇宙設定
+            </button>
+            <button id="drawBtn" onclick="startLottery()" class="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 px-20 py-4 rounded-full font-bold text-xl shadow-[0_10px_40px_rgba(0,180,180,0.4)] transition hover:-translate-y-1 active:scale-95">
+                開始抽籤
+            </button>
+            <button onclick="toggleSound()" id="soundBtn" class="glass-panel px-6 py-3 hover:bg-cyan-900/40 transition flex items-center gap-2">
+                <span id="soundIcon">🔊</span>
+                音效開
+            </button>
+        </div>
+    </div>
+
+    <!-- 設定視窗 -->
+    <div id="settingsModal" class="fixed inset-0 bg-black/90 backdrop-blur-2xl z-[100] hidden items-center justify-center p-4">
+        <div class="glass-panel w-full max-w-lg p-8 pointer-events-auto max-h-[90vh] overflow-y-auto border-cyan-500/30">
+            <div class="flex justify-between items-center mb-8 border-b border-white/10 pb-4">
+                <h2 class="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">3D 抽籤設定</h2>
+                <button onclick="toggleSettings()" class="text-white/40 hover:text-white transition">✕</button>
+            </div>
+
+            <div class="space-y-6 pb-24"> 
+                <div>
+                    <label class="block text-xs font-bold text-cyan-400 tracking-widest mb-2 uppercase">活動主題</label>
+                    <input type="text" id="inputTitle" value="互動數字宇宙" class="w-full bg-white/5 border border-white/10 rounded-lg p-3 focus:border-cyan-500 outline-none transition">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="relative">
+                        <label class="block text-xs font-bold text-cyan-400 tracking-widest mb-2 uppercase">名單來源</label>
+                        <select id="sourceMode" onchange="updateSourceUI()" class="w-full bg-[#1a253a] border border-white/10 rounded-lg p-3 outline-none focus:border-cyan-500 transition cursor-pointer">
+                            <option value="numbers">座號產生 (1-X)</option>
+                            <option value="custom">自訂名單 / 上傳</option>
+                        </select>
+                    </div>
+                    <div id="numberCountDiv">
+                        <label class="block text-xs font-bold text-cyan-400 tracking-widest mb-2 uppercase">總人數</label>
+                        <input type="number" id="totalNumbers" value="30" class="w-full bg-white/5 border border-white/10 rounded-lg p-3 outline-none">
+                    </div>
+                </div>
+
+                <div id="customListDiv" class="hidden">
+                    <label class="block text-xs font-bold text-cyan-400 tracking-widest mb-2 uppercase">名單內容 (每行一位)</label>
+                    <textarea id="customNames" class="w-full h-32 bg-white/5 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-cyan-500 transition" placeholder="王小明&#10;李大華..."></textarea>
+                    <div class="mt-2 flex items-center justify-between">
+                        <span class="text-[10px] text-white/40">支援貼上文字或匯入 .txt</span>
+                        <input type="file" id="fileInput" accept=".txt" onchange="handleFileUpload()" class="text-[10px] cursor-pointer text-cyan-400">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 border-t border-white/10 pt-6">
+                    <div>
+                        <label class="block text-xs font-bold text-cyan-400 tracking-widest mb-2 uppercase">單次抽出人數</label>
+                        <input type="number" id="drawCount" value="1" min="1" class="w-full bg-white/5 border border-white/10 rounded-lg p-3 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-cyan-400 tracking-widest mb-2 uppercase">獎項數</label>
+                        <input type="number" id="prizeLimit" value="0" placeholder="0 為無限制" class="w-full bg-white/5 border border-white/10 rounded-lg p-3 outline-none">
+                    </div>
+                </div>
+
+                <div class="space-y-3 bg-white/5 p-5 rounded-xl border border-white/5">
+                    <label class="flex items-center gap-3 cursor-pointer group">
+                        <input type="checkbox" id="removeAfterDraw" checked class="w-5 h-5 accent-cyan-500 cursor-pointer">
+                        <span class="text-sm group-hover:text-cyan-300 transition">抽中後從星球移除 (不重複)</span>
+                    </label>
+                    <label class="flex items-center gap-3 cursor-pointer group">
+                        <input type="checkbox" id="prizeMode" class="w-5 h-5 accent-pink-500 cursor-pointer">
+                        <span class="text-sm group-hover:text-pink-300 transition">開啟獎項數量扣除模式</span>
+                    </label>
+                </div>
+
+                <button onclick="saveSettings()" class="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 py-4 rounded-xl font-bold shadow-lg shadow-cyan-900/40 transition active:scale-[0.98]">
+                    重新初始化星球抽籤
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 中獎名單歷史視窗 (Modal) -->
+    <div id="winnerModal" class="fixed inset-0 bg-black/95 backdrop-blur-3xl z-[150] hidden items-center justify-center p-6">
+        <div class="glass-panel w-full max-w-4xl p-8 modal-enter border-pink-500/20 flex flex-col">
+            <div class="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
+                <div>
+                    <h2 class="text-2xl font-bold text-pink-400 tracking-widest uppercase">✨ 榮耀中獎名單</h2>
+                    <p class="text-[11px] text-white/40 mt-1">累積獲選的星際探索者</p>
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="exportWinners()" class="bg-pink-600 hover:bg-pink-500 px-5 py-2.5 rounded-lg text-xs font-bold transition flex items-center gap-2">
+                        📥 下載中獎名單
+                    </button>
+                    <button onclick="toggleWinnerModal()" class="text-white/40 hover:text-white transition text-2xl px-2">✕</button>
+                </div>
+            </div>
+            
+            <div id="historyWinnerContainer" class="bg-white/5 rounded-2xl p-6 min-h-[300px] max-h-[60vh] overflow-y-auto flex flex-wrap items-center justify-center gap-4">
+                <!-- 內容動態插入 -->
+            </div>
+
+            <div class="mt-8 flex justify-center">
+                <button onclick="toggleWinnerModal()" class="px-8 py-2.5 border border-white/10 rounded-full hover:bg-white/5 transition text-xs tracking-widest uppercase text-white/60">返回宇宙</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 3D 核心系統 ---
+        let scene, camera, renderer, globeGroup, controls;
+        const container = document.getElementById('canvas-container');
+
+        function init3D() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 3000);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.rotateSpeed = 0.5;
+            controls.autoRotate = true; 
+            controls.autoRotateSpeed = 1.0;
+            controls.enablePan = false; 
+
+            const starsGeo = new THREE.BufferGeometry();
+            const starsCount = 3000;
+            const starsPos = new Float32Array(starsCount * 3);
+            for(let i=0; i<starsCount*3; i++) starsPos[i] = (Math.random() - 0.5) * 2000;
+            starsGeo.setAttribute('position', new THREE.BufferAttribute(starsPos, 3));
+            const starsMat = new THREE.PointsMaterial({ color: 0xffffff, size: 1.0, transparent: true, opacity: 0.3 });
+            scene.add(new THREE.Points(starsGeo, starsMat));
+
+            globeGroup = new THREE.Group();
+            scene.add(globeGroup);
+
+            camera.position.set(0, 5, 22);
+            controls.update();
+            animate();
+        }
+
+        function createTextTexture(text, colorStr) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 512; canvas.height = 512;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const gradient = ctx.createRadialGradient(256, 256, 10, 256, 256, 200);
+            gradient.addColorStop(0, colorStr + '44');
+            gradient.addColorStop(1, 'transparent');
+            ctx.fillStyle = gradient;
+            ctx.beginPath(); ctx.arc(256, 256, 180, 0, Math.PI * 2); ctx.fill();
+            ctx.font = 'Bold 120px "Microsoft JhengHei"';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.shadowColor = colorStr; ctx.shadowBlur = 25;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(text, 256, 256);
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.minFilter = THREE.LinearFilter;
+            return texture;
+        }
+
+        function update3DNames() {
+            while(globeGroup.children.length > 0) {
+                const child = globeGroup.children[0];
+                if (child.material.map) child.material.map.dispose();
+                child.material.dispose();
+                globeGroup.remove(child);
+            }
+            const names = state.pool;
+            const count = names.length;
+            if (count === 0) return;
+
+            const radius = 9;
+            let scaleBase = 3.5;
+            if (count > 30) scaleBase = 3.5 * Math.pow(30 / count, 0.4); 
+            if (scaleBase < 1.2) scaleBase = 1.2;
+
+            for (let i = 0; i < count; i++) {
+                const phi = Math.acos(-1 + (2 * i) / count);
+                const theta = Math.sqrt(count * Math.PI) * phi;
+                const x = radius * Math.cos(theta) * Math.sin(phi);
+                const y = radius * Math.sin(theta) * Math.sin(phi);
+                const z = radius * Math.cos(phi);
+                const hue = Math.random(); 
+                const color = new THREE.Color().setHSL(hue, 0.8, 0.6);
+                const texture = createTextTexture(names[i], `#${color.getHexString()}`);
+                const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+                const sprite = new THREE.Sprite(material);
+                sprite.position.set(x, y, z);
+                sprite.scale.set(scaleBase, scaleBase, 1);
+                globeGroup.add(sprite);
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update(); 
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- 抽籤系統狀態 ---
+        let state = {
+            pool: [],
+            winners: [], 
+            isDrawing: false,
+            soundEnabled: true,
+            prizeRemaining: 0,
+            settings: {
+                title: "互動數字宇宙",
+                source: "numbers",
+                total: 30,
+                drawCount: 1,
+                removeAfter: true,
+                prizeMode: false,
+                prizeLimit: 0,
+                customNames: []
+            }
+        };
+
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playSound(type) {
+            if (!state.soundEnabled) return;
+            const osc = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            osc.connect(g); g.connect(audioCtx.destination);
+            if (type === 'tick') {
+                osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.05);
+                g.gain.setValueAtTime(0.03, audioCtx.currentTime);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.05);
+            } else {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523.25, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1046.5, audioCtx.currentTime + 0.4);
+                g.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.4);
+            }
+        }
+
+        function updateSourceUI() {
+            const mode = document.getElementById('sourceMode').value;
+            document.getElementById('numberCountDiv').classList.toggle('hidden', mode !== 'numbers');
+            document.getElementById('customListDiv').classList.toggle('hidden', mode !== 'custom');
+        }
+
+        function toggleSettings() {
+            document.getElementById('settingsModal').classList.toggle('hidden');
+            document.getElementById('settingsModal').classList.toggle('flex');
+        }
+
+        function toggleSound() {
+            state.soundEnabled = !state.soundEnabled;
+            document.getElementById('soundBtn').innerHTML = state.soundEnabled ? '🔊 音效開' : '🔇 音效關';
+        }
+
+        function saveSettings() {
+            state.settings.title = document.getElementById('inputTitle').value;
+            state.settings.source = document.getElementById('sourceMode').value;
+            state.settings.total = parseInt(document.getElementById('totalNumbers').value) || 30;
+            state.settings.drawCount = parseInt(document.getElementById('drawCount').value) || 1;
+            state.settings.removeAfter = document.getElementById('removeAfterDraw').checked;
+            state.settings.prizeMode = document.getElementById('prizeMode').checked;
+            state.settings.prizeLimit = parseInt(document.getElementById('prizeLimit').value) || 0;
+            
+            const customText = document.getElementById('customNames').value;
+            state.settings.customNames = customText.split('\n').map(n => n.trim()).filter(n => n !== '');
+
+            document.getElementById('displayTitle').innerText = state.settings.title;
+            state.winners = []; 
+            resetPool();
+            
+            if (state.settings.prizeMode && state.settings.prizeLimit > 0) {
+                state.prizeRemaining = state.settings.prizeLimit;
+            } else {
+                document.getElementById('prizeStatus').innerText = '';
+            }
+
+            updateStatusUI();
+            toggleSettings();
+            hideResult();
+        }
+
+        function resetPool() {
+            if (state.settings.source === 'numbers') {
+                state.pool = Array.from({ length: state.settings.total }, (_, i) => `${i + 1}號`);
+            } else {
+                state.pool = [...state.settings.customNames];
+            }
+            update3DNames();
+            updateStatusUI();
+        }
+
+        function updateStatusUI() {
+            document.getElementById('remainingCount').innerText = state.pool.length;
+            if (state.settings.prizeMode) {
+                document.getElementById('prizeStatus').innerText = `🎁 剩餘獎額：${state.prizeRemaining}`;
+            }
+            document.getElementById('viewWinnersBtn').classList.toggle('hidden', state.winners.length === 0);
+        }
+
+        function hideResult() {
+            document.getElementById('resultDisplay').classList.add('hidden');
+        }
+
+        function startLottery() {
+            if (state.isDrawing) return;
+            if (state.pool.length === 0) {
+                alert("星球名單已空，請點擊設定重置星球抽籤。");
+                return;
+            }
+            if (state.settings.prizeMode && state.prizeRemaining <= 0) {
+                alert("獎項名額已抽完！");
+                return;
+            }
+
+            state.isDrawing = true;
+            hideResult();
+            document.getElementById('drawBtn').disabled = true;
+            document.getElementById('drawBtn').classList.add('opacity-50');
+            controls.autoRotateSpeed = 25.0;
+
+            let timer = 0;
+            const maxTicks = 12;
+            const interval = setInterval(() => {
+                playSound('tick');
+                timer++;
+                if (timer > maxTicks) {
+                    clearInterval(interval);
+                    finalizeDraw();
+                }
+            }, 100);
+        }
+
+        // --- 核心：渲染名單卡片與智慧縮放 ---
+        function renderWinnerCards(names, containerElement) {
+            containerElement.innerHTML = '';
+            const count = names.length;
+            
+            // 智慧縮放演算法
+            let fontSize = "text-5xl";
+            let padding = "p-8";
+            let minWidth = "min-w-[180px]";
+
+            if (count > 4) {
+                fontSize = "text-4xl";
+                padding = "p-6";
+                minWidth = "min-w-[150px]";
+            }
+            if (count > 10) {
+                fontSize = "text-2xl";
+                padding = "p-4";
+                minWidth = "min-w-[120px]";
+            }
+            if (count > 24) {
+                fontSize = "text-base";
+                padding = "p-2";
+                minWidth = "min-w-[80px]";
+            }
+            if (count > 60) {
+                fontSize = "text-[10px]";
+                padding = "p-1";
+                minWidth = "min-w-[60px]";
+            }
+
+            names.forEach(name => {
+                const card = document.createElement('div');
+                card.className = `winner-card rounded-2xl flex items-center justify-center font-bold text-white tracking-widest ${fontSize} ${padding} ${minWidth}`;
+                card.innerText = name;
+                containerElement.appendChild(card);
+            });
+        }
+
+        function finalizeDraw() {
+            const currentDrawWinners = [];
+            const countToDraw = Math.min(state.settings.drawCount, state.pool.length, state.settings.prizeMode ? state.prizeRemaining : 999);
+
+            for (let i = 0; i < countToDraw; i++) {
+                const idx = Math.floor(Math.random() * state.pool.length);
+                const win = state.pool[idx];
+                currentDrawWinners.push(win);
+                state.winners.push(win);
+                if (state.settings.removeAfter) {
+                    state.pool.splice(idx, 1);
+                }
+            }
+
+            // 渲染即時結果
+            const immediateList = document.getElementById('immediateWinnerList');
+            renderWinnerCards(currentDrawWinners, immediateList);
+            document.getElementById('resultDisplay').classList.remove('hidden');
+            
+            playSound('win');
+
+            if (state.settings.prizeMode) {
+                state.prizeRemaining = Math.max(0, state.prizeRemaining - currentDrawWinners.length);
+            }
+
+            controls.autoRotateSpeed = 1.0;
+            update3DNames();
+            updateStatusUI();
+            state.isDrawing = false;
+            document.getElementById('drawBtn').disabled = false;
+            document.getElementById('drawBtn').classList.remove('opacity-50');
+        }
+
+        function toggleWinnerModal() {
+            const modal = document.getElementById('winnerModal');
+            if (modal.classList.contains('hidden')) {
+                renderWinnerCards(state.winners, document.getElementById('historyWinnerContainer'));
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            } else {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
+        }
+
+        function exportWinners() {
+            if (state.winners.length === 0) return;
+            const listText = `【${state.settings.title}】中獎名單\n時間：${new Date().toLocaleString()}\n--------------------\n` + state.winners.join('\n');
+            const blob = new Blob([listText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `中獎名單_${state.settings.title}_${new Date().toLocaleDateString()}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function handleFileUpload() {
+            const file = document.getElementById('fileInput').files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => document.getElementById('customNames').value = e.target.result;
+            reader.readAsText(file);
+        }
+
+        window.onload = () => {
+            init3D();
+            resetPool();
+            updateSourceUI();
+        };
+    </script>
+</body>
+</html>
