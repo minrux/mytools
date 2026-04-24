@@ -90,40 +90,49 @@
     async function fetchTools() {
         const container = document.getElementById('tool-container');
         try {
-            // 1. 抓取 GitHub 檔案清單 [cite: 37, 54]
             const response = await fetch(`https://api.github.com/repos/${GITHUB_USER}/${REPO_NAME}/contents/`);
+            if (!response.ok) throw new Error(`連線失敗: ${response.status}`);
+            
             const files = await response.json();
             container.innerHTML = '';
 
             const htmlFiles = files.filter(f => f.name.endsWith('.html') && f.name !== 'index.html');
 
-            // 2. 遍歷檔案，逐一「讀取內容」獲取描述
             for (const file of htmlFiles) {
                 const card = document.createElement('div');
                 card.className = 'card';
                 
-                // 讀取該檔案的 HTML 內容來抓取 meta description [cite: 36]
-                const fileRes = await fetch(file.download_url);
-                const htmlText = await fileRes.text();
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(htmlText, 'text/html');
-                const metaDesc = doc.querySelector('meta[name="description"]')?.content || "點擊開啟教學工具";
+                try {
+                    // 1. 抓取檔案內容
+                    const fileRes = await fetch(file.download_url);
+                    const htmlText = await fileRes.text();
+                    
+                    // 2. 解析 HTML 內容
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(htmlText, 'text/html');
+                    
+                    // 🌟 關鍵：直接抓取 <title> 標籤內容
+                    const pageTitle = doc.title || file.name.replace('.html', '');
+                    
+                    // 3. 抓取說明文字（如果有的話）
+                    const metaDesc = doc.querySelector('meta[name="description"]')?.content 
+                                    || "點擊下方按鈕開啟。";
 
-                // 檢查是否有對應的縮圖 (例如檔名.png)
-                const imgUrl = file.name.replace('.html', '.png');
-                const hasImg = files.some(f => f.name === imgUrl);
-                const displayImg = hasImg ? imgUrl : 'https://via.placeholder.com/300x150?text=No+Preview';
-
-                card.innerHTML = `
-                    <img src="${displayImg}" style="width:100%; height:150px; object-fit:cover; border-radius:10px;" onerror="this.src='https://via.placeholder.com/300x150?text=My+Tool'">
-                    <h3 style="margin: 15px 0 5px;">${file.name.replace('.html', '').toUpperCase()}</h3>
-                    <p style="color: #666; font-size: 0.85em; padding: 0 10px; min-height: 40px;">${metaDesc}</p>
-                    <a href="${file.name}" class="btn">點此開啟</a>
-                `;
-                container.appendChild(card);
+                    card.innerHTML = `
+                        <h3 style="color: #333; margin: 0; font-size: 1.4rem;">${pageTitle}</h3>
+                        <small style="color: #bbb; font-family: monospace;">${file.name}</small>
+                        <p style="color: #666; font-size: 0.95em; margin: 15px 0; line-height: 1.6;">
+                            ${metaDesc}
+                        </p>
+                        <a href="${file.name}" class="btn">立即進入</a>
+                    `;
+                    container.appendChild(card);
+                } catch (err) {
+                    console.error(`讀取 ${file.name} 失敗`, err);
+                }
             }
         } catch (e) {
-            container.innerHTML = `<div style="color:red;">掃描失敗: ${e.message}</div>`;
+            container.innerHTML = `<div style="color:red; padding:20px;">❌ 掃描失敗: ${e.message}</div>`;
         }
     }
     fetchTools();
