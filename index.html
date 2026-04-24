@@ -4,12 +4,56 @@
     <meta charset="UTF-8">
     <title>我的雲端工具箱</title>
     <style>
-        body { font-family: sans-serif; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; padding: 40px; }
-        #tool-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; width: 100%; max-width: 1000px; }
-        .card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); text-align: center; transition: 0.3s; }
-        .card:hover { transform: translateY(-5px); }
-        .btn { background: #007bff; color: white; text-decoration: none; padding: 10px 15px; border-radius: 8px; display: inline-block; margin-top: 10px; }
-    </style>
+    body { 
+        font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif; 
+        background: #fdf5f5; 
+        display: flex; 
+        flex-direction: column; 
+        align-items: center; 
+        padding: 40px 20px; 
+        margin: 0;
+    }
+
+    h1 { color: #333; margin-bottom: 40px; }
+
+    /* 核心：自適應網格容器 */
+    #tool-container { 
+        display: grid; 
+        /* 每個卡片最小 280px，剩下的空間自動填滿 */
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); 
+        gap: 25px; 
+        width: 100%; 
+        max-width: 1200px; /* 限制最大寬度，避免在大螢幕太散 */
+    }
+
+    .card { 
+        background: white; 
+        border-radius: 20px; 
+        padding: 30px 20px; 
+        box-shadow: 0 10px 20px rgba(0,0,0,0.05); 
+        text-align: center; 
+        transition: transform 0.3s ease;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+
+    .card:hover { transform: translateY(-10px); }
+
+    .card h3 { color: #444; margin-bottom: 10px; }
+
+    .card p { color: #777; font-size: 0.9em; margin-bottom: 20px; }
+
+    .btn { 
+        background: #ffb7b7; 
+        color: white; 
+        text-decoration: none; 
+        padding: 12px 25px; 
+        border-radius: 25px; 
+        display: inline-block;
+        font-weight: bold;
+    }
+</style>
 </head>
 <body>
     <h1>🚀 我的雲端工具自動選單</h1>
