@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>英語單字隨機測驗</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #1e293b;
+      --border: #e2e8f0;
+      --correct: #16a34a;
+      --wrong: #dc2626;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 24px 16px; display: flex; justify-content: center; }
+    .container { width: 100%; max-width: 680px; background: var(--card-bg); border-radius: 12px; padding: 24px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); border: 1px solid var(--border); }
+    h1 { font-size: 1.5rem; text-align: center; margin-bottom: 8px; color: var(--primary); }
+    .subtitle { text-align: center; font-size: 0.9rem; color: #64748b; margin-bottom: 20px; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; background: #f1f5f9; padding: 12px; border-radius: 8px; margin-bottom: 24px; }
+    .btn { background: var(--primary); color: #fff; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 0.95rem; font-weight: 500; transition: 0.2s; }
+    .btn:hover { background: var(--primary-hover); }
+    .btn-secondary { background: #64748b; }
+    .btn-secondary:hover { background: #475569; }
+    .file-input { display: none; }
+    .file-label { display: inline-block; background: #0284c7; color: white; padding: 8px 14px; border-radius: 6px; font-size: 0.85rem; cursor: pointer; }
+    .file-label:hover { background: #0369a1; }
+    .q-card { border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px; background: #fff; }
+    .q-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 12px; display: flex; justify-content: space-between; }
+    .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    @media (max-width: 520px) { .options-grid { grid-template-columns: 1fr; } }
+    .option-btn { border: 1px solid var(--border); padding: 10px 14px; border-radius: 6px; background: #f8fafc; text-align: left; cursor: pointer; transition: 0.15s; font-size: 0.95rem; }
+    .option-btn:hover { background: #e2e8f0; }
+    .option-btn.selected { background: #dbeafe; border-color: var(--primary); color: var(--primary); font-weight: 600; }
+    .option-btn.ans-correct { background: #dcfce7 !important; border-color: var(--correct) !important; color: var(--correct) !important; }
+    .option-btn.ans-wrong { background: #fee2e2 !important; border-color: var(--wrong) !important; color: var(--wrong) !important; }
+    .footer-actions { text-align: center; margin-top: 24px; }
+    .result-box { display: none; text-align: center; padding: 20px; background: #eff6ff; border-radius: 8px; margin-bottom: 20px; }
+    .result-score { font-size: 2rem; font-weight: 700; color: var(--primary); margin: 8px 0; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>英語單字 25 題挑戰</h1>
+  <p class="subtitle">每次隨機選取 25 題單選題・檢驗單字實力</p>
+
+  <div class="toolbar">
+    <div>
+      <span id="bank-count" style="font-weight: 600;">題庫載入中...</span>
+    </div>
+    <div style="display: flex; gap: 8px;">
+      <label class="file-label" for="upload-file">匯入新 Excel</label>
+      <input type="file" id="upload-file" class="file-input" accept=".xlsx, .xls, .csv">
+      <button class="btn" onclick="startQuiz()">重新出題</button>
+    </div>
+  </div>
+
+  <div id="result-container" class="result-box">
+    <h3>測驗完成！</h3>
+    <div class="result-score" id="score-text">0 / 25</div>
+    <p id="feedback-text" style="color: #64748b; margin-bottom: 12px;"></p>
+    <button class="btn btn-secondary" onclick="startQuiz()">再測驗一次</button>
+  </div>
+
+  <div id="quiz-container"></div>
+
+  <div class="footer-actions" id="submit-box" style="display: none;">
+    <button class="btn" style="padding: 12px 36px; font-size: 1.1rem;" onclick="submitQuiz()">交卷算分</button>
+  </div>
+</div>
+
+<script>
+// 預載本次 Excel 提取出的 253 個核心單字
+const DEFAULT_WORDS = [
+  ["afternoon","下午"],["evening","傍晚"],["fine","美好的"],["good","好的"],["goodbye","再見"],
+  ["hello","哈囉"],["morning","早上"],["night","晚上"],["thank","謝謝"],["father","父親"],
+  ["mother","母親"],["brother","兄弟"],["sister","姊妹"],["parent","雙親"],["grandfather","祖父"],
+  ["grandmother","祖母"],["family","家庭"],["friend","朋友"],["breakfast","早餐"],["dinner","晚餐"],
+  ["lunch","午餐"],["girl","女孩"],["boy","男孩"],["student","學生"],["classmate","同班同學"],
+  ["book","書"],["book bag","書包"],["chair","椅子"],["computer","電腦"],["desk","書桌"],
+  ["eraser","橡皮擦"],["marker","麥克筆"],["notebook","筆記本"],["pen","原子筆"],["pencil","鉛筆"],
+  ["pencil case","鉛筆盒"],["ruler","尺"],["teacher","老師"],["black","黑色"],["blue","藍色"],
+  ["brown","棕色"],["green","綠色"],["orange","橘色"],["pink","粉紅色"],["purple","紫色"],
+  ["red","紅色"],["white","白色"],["yellow","黃色"],["color","顏色"],["apple","蘋果"],
+  ["banana","香蕉"],["grape","葡萄"],["lemon","檸檬"],["mango","芒果"],["orange","柳橙"],
+  ["papaya","木瓜"],["peach","桃子"],["pear","梨子"],["watermelon","西瓜"],["fruit","水果"],
+  ["cat","貓"],["dog","狗"],["elephant","大象"],["fish","魚"],["frog","青蛙"],
+  ["horse","馬"],["lion","獅子"],["monkey","猴子"],["pig","豬"],["rabbit","兔子"],
+  ["tiger","老虎"],["animal","動物"],["bear","熊"],["bird","鳥"],["duck","鴨"],
+  ["fox","狐狸"],["panda","熊貓"],["snake","蛇"],["turtle","烏龜"],["zebra","斑馬"]
+];
+
+let wordBank = [];
+let currentQuiz = [];
+let userAnswers = {};
+
+function initBank() {
+  const saved = localStorage.getItem("custom_word_bank");
+  if (saved) {
+    try { wordBank = JSON.parse(saved); } catch(e) { wordBank = DEFAULT_WORDS; }
+  } else {
+    wordBank = DEFAULT_WORDS;
+  }
+  updateBankCount();
+  startQuiz();
+}
+
+function updateBankCount() {
+  document.getElementById("bank-count").innerText = `目前字庫：${wordBank.length} 字`;
+}
+
+function getRandomItems(arr, count) {
+  const shuffled = [...arr].sort(() => 0.5 - Math.random());
+  return shuffled.slice(0, count);
+}
+
+function startQuiz() {
+  userAnswers = {};
+  document.getElementById("result-container").style.display = "none";
+  document.getElementById("submit-box").style.display = "block";
+
+  const quizSize = Math.min(25, wordBank.length);
+  const selected = getRandomItems(wordBank, quizSize);
+
+  currentQuiz = selected.map((item, idx) => {
+    const isEnToZh = Math.random() > 0.3; // 70% 看英文選中文，30% 看中文選英文
+    const questionText = isEnToZh ? item[0] : item[1];
+    const correctAns = isEnToZh ? item[1] : item[0];
+
+    // 生成三個干擾項
+    const others = wordBank.filter(w => (isEnToZh ? w[1] : w[0]) !== correctAns);
+    const distractors = getRandomItems(others, 3).map(w => isEnToZh ? w[1] : w[0]);
+    const options = [...distractors, correctAns].sort(() => 0.5 - Math.random());
+
+    return { id: idx, q: questionText, ans: correctAns, options: options, type: isEnToZh ? "英選中" : "中選英" };
+  });
+
+  renderQuiz();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function renderQuiz() {
+  const container = document.getElementById("quiz-container");
+  container.innerHTML = currentQuiz.map((q, idx) => `
+    <div class="q-card" id="card-${idx}">
+      <div class="q-title">
+        <span>${idx + 1}. <strong>${q.q}</strong></span>
+        <span style="font-size: 0.8rem; color: #94a3b8; font-weight: normal;">[${q.type}]</span>
+      </div>
+      <div class="options-grid">
+        ${q.options.map(opt => `
+          <button type="button" class="option-btn ${userAnswers[idx] === opt ? 'selected' : ''}" 
+            onclick="selectOption(${idx}, '${opt.replace(/'/g, "\\'")}')">
+            ${opt}
+          </button>
+        `).join("")}
+      </div>
+    </div>
+  `).join("");
+}
+
+function selectOption(qIdx, option) {
+  userAnswers[qIdx] = option;
+  const card = document.getElementById(`card-${qIdx}`);
+  const buttons = card.querySelectorAll(".option-btn");
+  buttons.forEach(btn => {
+    btn.classList.toggle("selected", btn.innerText.trim() === option);
+  });
+}
+
+function submitQuiz() {
+  let score = 0;
+  currentQuiz.forEach((q, idx) => {
+    const card = document.getElementById(`card-${idx}`);
+    const buttons = card.querySelectorAll(".option-btn");
+    const userPick = userAnswers[idx];
+
+    buttons.forEach(btn => {
+      const text = btn.innerText.trim();
+      btn.disabled = true;
+      if (text === q.ans) btn.classList.add("ans-correct");
+      if (userPick === text && text !== q.ans) btn.classList.add("ans-wrong");
+    });
+
+    if (userPick === q.ans) score++;
+  });
+
+  const total = currentQuiz.length;
+  document.getElementById("score-text").innerText = `${score} / ${total}`;
+  document.getElementById("feedback-text").innerText = score === total ? "太厲害了！滿分過關 🎉" : `答對率 ${(score/total*100).toFixed(0)}%，檢查下方綠色正確答案吧！`;
+  document.getElementById("result-container").style.display = "block";
+  document.getElementById("submit-box").style.display = "none";
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// 支援直接上傳 Excel 檔案擴充或置換單字
+document.getElementById("upload-file").addEventListener("change", function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    const data = new Uint8Array(evt.target.result);
+    const workbook = XLSX.read(data, { type: 'array' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+    const newWords = [];
+    rows.forEach(r => {
+      // 自動搜尋每一列中符合「英文, 中文」配對的欄位組合
+      for (let i = 0; i < r.length - 1; i++) {
+        const en = String(r[i] || '').trim();
+        const zh = String(r[i+1] || '').trim();
+        if (/^[a-zA-Z\s\-]+$/.test(en) && /[\u4e00-\u9fa5]/.test(zh)) {
+          newWords.push([en, zh]);
+        }
+      }
+    });
+
+    if (newWords.length > 0) {
+      wordBank = newWords;
+      localStorage.setItem("custom_word_bank", JSON.stringify(wordBank));
+      updateBankCount();
+      alert(`成功匯入 ${newWords.length} 個單字！即刻開始測驗。`);
+      startQuiz();
+    } else {
+      alert("未能讀取到單字，請確認 Excel 包含英文與中文欄位。");
+    }
+  };
+  reader.readAsArrayBuffer(file);
+});
+
+initBank();
+</script>
+
+</body>
+</html>
